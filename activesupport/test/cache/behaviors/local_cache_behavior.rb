@@ -190,11 +190,13 @@ module LocalCacheBehavior
     @cache.with_local_cache do
       @cache.write(key, 1, raw: true)
       @peek.write(key, 2, raw: true)
+
       @cache.increment(key)
 
       expected = @peek.read(key, raw: true)
       assert_equal 3, Integer(expected)
       assert_equal expected, @cache.read(key, raw: true)
+      assert_equal({ key => expected }, @cache.read_multi(key, raw: true))
     end
   end
 
@@ -205,9 +207,11 @@ module LocalCacheBehavior
       @peek.write(key, 3, raw: true)
 
       @cache.decrement(key)
+
       expected = @peek.read(key, raw: true)
       assert_equal 2, Integer(expected)
       assert_equal expected, @cache.read(key, raw: true)
+      assert_equal({ key => expected }, @cache.read_multi(key, raw: true))
     end
   end
 
@@ -220,6 +224,7 @@ module LocalCacheBehavior
       @peek.delete(other_key)
       assert_equal true, @cache.read(key)
       assert_equal true, @cache.read(other_key)
+      assert_equal({ key => true, other_key => true }, @cache.read_multi(key, other_key))
     end
   end
 
@@ -236,6 +241,17 @@ module LocalCacheBehavior
       assert_equal other_value, @cache.read(other_key, raw: true)
       assert_equal value, values[key]
       assert_equal other_value, values[other_key]
+    end
+  end
+
+  def test_local_cache_of_read_multi_with_unknown_keys
+    key = SecureRandom.uuid
+    other_key = SecureRandom.uuid
+    value = SecureRandom.alphanumeric
+    @cache.with_local_cache do
+      @cache.write(key, value)
+      @peek.write(other_key, value) # written outside of the local cache
+      assert_equal({ key => value, other_key => value }, @cache.read_multi(key, other_key))
     end
   end
 
@@ -304,6 +320,19 @@ module LocalCacheBehavior
     @cache.with_local_cache do
       assert @cache.write_multi(values)
       assert_equal values, @cache.read_multi(*keys)
+    end
+  end
+
+  def test_local_cache_multi_read_write_and_increment_decrement_raw
+    key = SecureRandom.uuid
+    other_key = SecureRandom.uuid
+    @cache.with_local_cache do
+      @cache.write_multi({ key => 1, other_key => 3 }, raw: true)
+      assert_equal({ key => "1", other_key => "3" }, @cache.read_multi(key, other_key, raw: true))
+
+      @cache.increment(key)
+      @cache.decrement(other_key)
+      assert_equal({ key => "2", other_key => "2" }, @cache.read_multi(key, other_key, raw: true))
     end
   end
 end
